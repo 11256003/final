@@ -1,4 +1,4 @@
-import { arrayRemove, arrayUnion, collection, doc, getDoc, getDocs, query, updateDoc, where } from "firebase/firestore";
+import { arrayRemove, arrayUnion, collection, doc, getDoc, getDocs, query, updateDoc } from "firebase/firestore";
 import type { User } from "../types/chat";
 import { db } from "./firebase";
 
@@ -29,54 +29,78 @@ export async function getUserData(userId: string): Promise<User | null> {
 /**
  * 搜尋用戶 (by username, email, or id)
  */
-export async function searchUser(query_text: string): Promise<User | null> {
+export async function searchUser(query_text: string, currentUserId?: string): Promise<User | null> {
   try {
-    // 先試著用 username 搜尋
-    let q = query(collection(db, "users"), where("username", "==", query_text));
-    let querySnapshot = await getDocs(q);
+    const normalizedQuery = query_text.toLowerCase().trim();
     
-    if (!querySnapshot.empty) {
-      const doc = querySnapshot.docs[0];
-      const data = doc.data();
-      return {
-        id: doc.id,
-        username: data.username,
-        name: data.name,
-        birthday: data.birthday || null,
-        avatar_url: data.avatar_url || null,
-        created_at: data.created_at,
-      };
+    if (!normalizedQuery) {
+      throw new Error("搜尋詞不能為空");
+    }
+    
+    // 直接用 ID 搜尋（優先，完全匹配）
+    const userId = query_text.trim();
+    if (userId !== currentUserId) {
+      const userDoc = await getDoc(doc(db, "users", userId));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        return {
+          id: userId,
+          username: data.username,
+          name: data.name,
+          birthday: data.birthday || null,
+          avatar_url: data.avatar_url || null,
+          created_at: data.created_at,
+        };
+      }
     }
 
-    // 試著用 email 搜尋
-    q = query(collection(db, "users"), where("email", "==", query_text));
-    querySnapshot = await getDocs(q);
+    // 獲取所有用戶並進行客戶端搜尋（不區分大小寫）
+    const q = query(collection(db, "users"));
+    const querySnapshot = await getDocs(q);
     
-    if (!querySnapshot.empty) {
-      const doc = querySnapshot.docs[0];
+    // 完全匹配優先
+    for (const doc of querySnapshot.docs) {
+      if (currentUserId && doc.id === currentUserId) continue; // 跳過自己
+      
       const data = doc.data();
-      return {
-        id: doc.id,
-        username: data.username,
-        name: data.name,
-        birthday: data.birthday || null,
-        avatar_url: data.avatar_url || null,
-        created_at: data.created_at,
-      };
+      const username = data.username?.toLowerCase() || "";
+      const email = data.email?.toLowerCase() || "";
+      
+      if (username === normalizedQuery || email === normalizedQuery) {
+        return {
+          id: doc.id,
+          username: data.username,
+          name: data.name,
+          birthday: data.birthday || null,
+          avatar_url: data.avatar_url || null,
+          created_at: data.created_at,
+        };
+      }
     }
-
-    // 試著直接用 ID 取用戶
-    const userDoc = await getDoc(doc(db, "users", query_text));
-    if (userDoc.exists()) {
-      const data = userDoc.data();
-      return {
-        id: query_text,
-        username: data.username,
-        name: data.name,
-        birthday: data.birthday || null,
-        avatar_url: data.avatar_url || null,
-        created_at: data.created_at,
-      };
+    
+    // 模糊匹配（包含搜尋詞）
+    for (const doc of querySnapshot.docs) {
+      if (currentUserId && doc.id === currentUserId) continue; // 跳過自己
+      
+      const data = doc.data();
+      const username = data.username?.toLowerCase() || "";
+      const email = data.email?.toLowerCase() || "";
+      const name = data.name?.toLowerCase() || "";
+      
+      if (
+        username.includes(normalizedQuery) ||
+        email.includes(normalizedQuery) ||
+        name.includes(normalizedQuery)
+      ) {
+        return {
+          id: doc.id,
+          username: data.username,
+          name: data.name,
+          birthday: data.birthday || null,
+          avatar_url: data.avatar_url || null,
+          created_at: data.created_at,
+        };
+      }
     }
 
     return null;
@@ -91,20 +115,22 @@ export async function searchUser(query_text: string): Promise<User | null> {
  */
 export async function searchUserByUsername(username: string): Promise<User | null> {
   try {
-    const q = query(collection(db, "users"), where("username", "==", username));
+    const normalizedUsername = username.toLowerCase().trim();
+    const q = query(collection(db, "users"));
     const querySnapshot = await getDocs(q);
     
-    if (!querySnapshot.empty) {
-      const doc = querySnapshot.docs[0];
+    for (const doc of querySnapshot.docs) {
       const data = doc.data();
-      return {
-        id: doc.id,
-        username: data.username,
-        name: data.name,
-        birthday: data.birthday || null,
-        avatar_url: data.avatar_url || null,
-        created_at: data.created_at,
-      };
+      if (data.username?.toLowerCase() === normalizedUsername) {
+        return {
+          id: doc.id,
+          username: data.username,
+          name: data.name,
+          birthday: data.birthday || null,
+          avatar_url: data.avatar_url || null,
+          created_at: data.created_at,
+        };
+      }
     }
     return null;
   } catch (error) {
@@ -147,14 +173,16 @@ export async function getFriendsList(userId: string): Promise<User[]> {
  */
 export async function addFriend(userId: string, searchQuery: string): Promise<void> {
   try {
-    // 搜尋好友（支持 username、email、id）
-    const friend = await searchUser(searchQuery);
+    // 搜尋好友（支持 username、email、id），排除當前用戶
+    const friend = await searchUser(searchQuery, userId);
     if (!friend) {
-      throw new Error(`User "${searchQuery}" not found`);
+      throw new Error(`找不到帳號「${searchQuery}」，請確認帳號、email 或用戶 ID 是否正確`);
     }
 
+    console.log(`[addFriend] Found friend: id=${friend.id}, name=${friend.name}`);
+
     if (friend.id === userId) {
-      throw new Error("Cannot add yourself as friend");
+      throw new Error("無法將自己加為好友");
     }
 
     // 檢查是否已是好友
@@ -163,20 +191,25 @@ export async function addFriend(userId: string, searchQuery: string): Promise<vo
     if (userDoc.exists()) {
       const friends = userDoc.data().friends || [];
       if (friends.includes(friend.id)) {
-        throw new Error("Already friends with this user");
+        throw new Error(`已經和「${friend.name}」是好友了`);
       }
     }
 
     // 新增到當前用戶的好友列表
+    console.log(`[addFriend] Adding ${friend.id} to ${userId}'s friends`);
     await updateDoc(userRef, {
       friends: arrayUnion(friend.id),
     });
+    console.log(`[addFriend] Successfully added ${friend.id} to ${userId}'s friends`);
 
     // 也新增到好友的好友列表 (雙向)
     const friendRef = doc(db, "users", friend.id);
+    console.log(`[addFriend] Adding ${userId} to ${friend.id}'s friends`);
     await updateDoc(friendRef, {
       friends: arrayUnion(userId),
     });
+    console.log(`[addFriend] Successfully added ${userId} to ${friend.id}'s friends`);
+    console.log(`[addFriend] Friendship bidirectional setup complete`);
   } catch (error) {
     console.error("Error adding friend:", error);
     throw error;

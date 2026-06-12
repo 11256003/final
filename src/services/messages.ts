@@ -1,4 +1,4 @@
-import { addDoc, collection, getDocs, onSnapshot, orderBy, query, Unsubscribe, where } from "firebase/firestore";
+import { addDoc, collection, getDocs, onSnapshot, query, Unsubscribe, where } from "firebase/firestore";
 import type { Message } from "../types/chat";
 import { db } from "./firebase";
 
@@ -21,8 +21,7 @@ export async function getMessagesFromFirestore(
     
     const q = query(
       collection(db, "messages"),
-      where("conversation", "==", conversationId),
-      orderBy("created_at", "asc")
+      where("conversation", "==", conversationId)
     );
 
     const querySnapshot = await getDocs(q);
@@ -38,6 +37,9 @@ export async function getMessagesFromFirestore(
         created_at: data.created_at,
       });
     });
+
+    // 在客戶端排序
+    messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
     return messages;
   } catch (error) {
@@ -55,29 +57,40 @@ export function listenToMessages(
   callback: (messages: Message[]) => void
 ): Unsubscribe {
   const conversationId = getConversationId(userId, friendId);
+  console.log(`[listenToMessages] userId: ${userId}, friendId: ${friendId}, conversationId: ${conversationId}`);
   
+  // 簡化查詢：只用 where，在客戶端排序
   const q = query(
     collection(db, "messages"),
-    where("conversation", "==", conversationId),
-    orderBy("created_at", "asc")
+    where("conversation", "==", conversationId)
   );
 
-  return onSnapshot(q, (querySnapshot) => {
-    const messages: Message[] = [];
+  return onSnapshot(
+    q,
+    (querySnapshot) => {
+      const messages: Message[] = [];
 
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      messages.push({
-        id: doc.id,
-        sender_id: data.sender_id,
-        receiver_id: data.receiver_id,
-        text: data.text,
-        created_at: data.created_at,
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        messages.push({
+          id: doc.id,
+          sender_id: data.sender_id,
+          receiver_id: data.receiver_id,
+          text: data.text,
+          created_at: data.created_at,
+        });
       });
-    });
 
-    callback(messages);
-  });
+      // 在客戶端排序
+      messages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      
+      console.log(`[listenToMessages] Received ${messages.length} messages for conversation ${conversationId}`);
+      callback(messages);
+    },
+    (error) => {
+      console.error(`[listenToMessages] Error listening to messages:`, error);
+    }
+  );
 }
 
 /**
@@ -90,14 +103,20 @@ export async function sendMessageToFirestore(
 ): Promise<Message> {
   try {
     const conversationId = getConversationId(senderId, receiverId);
+    console.log(`[sendMessageToFirestore] Sending message: senderId=${senderId}, receiverId=${receiverId}, conversationId=${conversationId}, text="${text}"`);
 
-    const docRef = await addDoc(collection(db, "messages"), {
+    const messageData = {
       sender_id: senderId,
       receiver_id: receiverId,
       text: text.trim(),
       conversation: conversationId,
       created_at: new Date().toISOString(),
-    });
+    };
+
+    console.log(`[sendMessageToFirestore] Message data:`, messageData);
+
+    const docRef = await addDoc(collection(db, "messages"), messageData);
+    console.log(`[sendMessageToFirestore] Message saved successfully with ID: ${docRef.id}`);
 
     return {
       id: docRef.id,
@@ -107,7 +126,7 @@ export async function sendMessageToFirestore(
       created_at: new Date().toISOString(),
     };
   } catch (error) {
-    console.error("Error sending message:", error);
+    console.error("[sendMessageToFirestore] Error sending message:", error);
     throw error;
   }
 }

@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, Unsubscribe, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, onSnapshot, query, Unsubscribe, where } from "firebase/firestore";
 import type { ChatSummary, Message, User } from "../types/chat";
 import { db } from "./firebase";
 
@@ -41,9 +41,7 @@ export async function getChatsList(userId: string): Promise<ChatSummary[]> {
       const conversationId = [userId, friendId].sort().join("_");
       const messagesRef = query(
         collection(db, "messages"),
-        where("conversation", "==", conversationId),
-        orderBy("created_at", "desc"),
-        limit(1)
+        where("conversation", "==", conversationId)
       );
 
       const messagesSnap = await getDocs(messagesRef);
@@ -51,9 +49,16 @@ export async function getChatsList(userId: string): Promise<ChatSummary[]> {
       let lastTime: string | null = null;
 
       if (!messagesSnap.empty) {
-        const messageData = messagesSnap.docs[0].data();
+        // 在客戶端排序以找到最後一筆訊息
+        const sortedDocs = messagesSnap.docs.sort((a, b) => {
+          const aTime = new Date(a.data().created_at).getTime();
+          const bTime = new Date(b.data().created_at).getTime();
+          return bTime - aTime;
+        });
+        
+        const messageData = sortedDocs[0].data();
         lastMessage = {
-          id: messagesSnap.docs[0].id,
+          id: sortedDocs[0].id,
           sender_id: messageData.sender_id,
           receiver_id: messageData.receiver_id,
           text: messageData.text,
@@ -88,9 +93,11 @@ export async function getChatsList(userId: string): Promise<ChatSummary[]> {
  */
 export function listenToChatsList(userId: string, callback: (chats: ChatSummary[]) => void): Unsubscribe {
   const userRef = doc(db, "users", userId);
+  console.log(`[listenToChatsList] Starting to listen for chats of user ${userId}`);
 
   return onSnapshot(userRef, async (userDoc) => {
     try {
+      console.log(`[listenToChatsList] User document updated for ${userId}`);
       if (!userDoc.exists()) {
         callback([]);
         return;
@@ -121,9 +128,7 @@ export function listenToChatsList(userId: string, callback: (chats: ChatSummary[
         const conversationId = [userId, friendId].sort().join("_");
         const messagesRef = query(
           collection(db, "messages"),
-          where("conversation", "==", conversationId),
-          orderBy("created_at", "desc"),
-          limit(1)
+          where("conversation", "==", conversationId)
         );
 
         const messagesSnap = await getDocs(messagesRef);
@@ -131,9 +136,16 @@ export function listenToChatsList(userId: string, callback: (chats: ChatSummary[
         let lastTime: string | null = null;
 
         if (!messagesSnap.empty) {
-          const messageData = messagesSnap.docs[0].data();
+          // 在客戶端排序以找到最後一筆訊息
+          const sortedDocs = messagesSnap.docs.sort((a, b) => {
+            const aTime = new Date(a.data().created_at).getTime();
+            const bTime = new Date(b.data().created_at).getTime();
+            return bTime - aTime;
+          });
+          
+          const messageData = sortedDocs[0].data();
           lastMessage = {
-            id: messagesSnap.docs[0].id,
+            id: sortedDocs[0].id,
             sender_id: messageData.sender_id,
             receiver_id: messageData.receiver_id,
             text: messageData.text,

@@ -38,9 +38,15 @@ export default function ChatRoomScreen() {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
 
+  console.log(`[ChatRoomScreen] Rendering: user=${user?.id}, friendId=${friendId}`);
+
   useFocusEffect(
     useCallback(() => {
-      if (!user || !friendId) return;
+      console.log(`[ChatRoomScreen useFocusEffect] user=${user?.id}, friendId=${friendId}`);
+      if (!user || !friendId) {
+        console.log("[ChatRoomScreen useFocusEffect] Missing user or friendId, returning");
+        return;
+      }
 
       let isActive = true;
 
@@ -56,6 +62,7 @@ export default function ChatRoomScreen() {
       })();
 
       const unsubscribe = listenToMessages(user.id, friendId, (newMessages) => {
+        console.log(`[ChatRoomScreen] listenToMessages callback received ${newMessages.length} messages`);
         if (isActive) {
           setMessages(newMessages);
         }
@@ -82,13 +89,17 @@ export default function ChatRoomScreen() {
   const onSend = async () => {
     if (!text.trim() || !friendId) return;
     const draft = text.trim();
+    console.log(`[onSend] Sending message from ${user?.id} to ${friendId}: "${draft}"`);
     setText("");
     setError("");
     try {
-      await sendMessageToFirestore(user.id, friendId, draft);
+      await sendMessageToFirestore(user!.id, friendId, draft);
+      console.log("[onSend] Message sent successfully");
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to send message";
+      console.error("[onSend] Error sending message:", errorMsg);
       setText(draft);
-      setError(err instanceof Error ? err.message : "Failed to send message");
+      setError(errorMsg);
     }
   };
 
