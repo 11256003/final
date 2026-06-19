@@ -1,19 +1,11 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import {
-    FlatList,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
-} from "react-native";
-import { Screen } from "../../components/Screen";
-import { commonStyles } from "../../components/styles";
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { UserAvatar } from "../../components/UserAvatar";
 import { useAuth } from "../../context/AuthContext";
 import { addFriendByUsername, getFriendsList } from "../../services/firestore";
 import type { User } from "../../types/chat";
+import { Ionicons } from '@expo/vector-icons';
 
 export default function FriendsScreen() {
   const { user } = useAuth();
@@ -29,9 +21,7 @@ export default function FriendsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadFriends().catch((err) =>
-        setError(err instanceof Error ? err.message : "載入好友失敗"),
-      );
+      loadFriends().catch((err) => setError("載入好友失敗"));
     }, [loadFriends]),
   );
 
@@ -43,82 +33,88 @@ export default function FriendsScreen() {
       setFriendUsername("");
       await loadFriends();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加入好友失敗");
+      setError(err instanceof Error ? err.message : "加入失敗");
     }
   };
 
   return (
-    <Screen>
-      <View style={styles.addBox}>
-        <Text style={styles.myId}>我的 ID：{user?.id}</Text>
-        <View style={styles.addRow}>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>好友列表</Text>
+        <View style={styles.idBadge}>
+          <Text style={styles.myIdLabel}>我的 ID：</Text>
+          <Text style={styles.myIdValue}>{user?.id}</Text>
+        </View>
+      </View>
+
+      <View style={styles.addSection}>
+        <View style={styles.searchBar}>
+          <Ionicons name="person-add-outline" size={20} color="#94a3b8" />
           <TextInput
             autoCapitalize="none"
-            placeholder="帳號、email 或 ID"
-            style={[commonStyles.input, styles.addInput]}
+            placeholder="搜尋帳號、Email 或 ID..."
+            style={styles.searchInput}
             value={friendUsername}
             onChangeText={setFriendUsername}
           />
           <Pressable style={styles.addButton} onPress={onAddFriend}>
-            <Text style={commonStyles.buttonText}>加入</Text>
+            <Text style={styles.addButtonText}>加入</Text>
           </Pressable>
         </View>
-        {error ? <Text style={commonStyles.error}>{error}</Text> : null}
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </View>
 
       <FlatList
-        contentContainerStyle={styles.list}
         data={friends}
         keyExtractor={(item) => item.id}
-        ListEmptyComponent={<Text style={styles.empty}>尚未加入好友</Text>}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="people-outline" size={64} color="#cbd5e1" />
+            <Text style={styles.emptyText}>尚未加入任何好友</Text>
+          </View>
+        }
         renderItem={({ item }) => (
-          <Pressable
-            style={commonStyles.row}
-            onPress={() => router.push(`/chat/${item.id}`)}
-          >
-            <UserAvatar name={item.name} uri={item.avatar_url} />
-            <View style={styles.rowText}>
-              <Text style={commonStyles.rowTitle}>{item.name}</Text>
-              <Text style={commonStyles.rowMeta}>ID：{item.id}</Text>
+          <Pressable style={styles.friendItem} onPress={() => router.push(`/chat/${item.id}`)}>
+            <UserAvatar name={item.name} uri={item.avatar_url} size={50} />
+            <View style={styles.friendInfo}>
+              <Text style={styles.friendName}>{item.name}</Text>
+              <Text style={styles.friendId}>ID: {item.id}</Text>
             </View>
+            <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
           </Pressable>
         )}
       />
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  addBox: {
-    gap: 10,
-    marginBottom: 16,
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  header: { padding: 24, backgroundColor: '#fff' },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#1e293b', marginBottom: 12 },
+  idBadge: { flexDirection: 'row', backgroundColor: '#f1f5f9', padding: 10, borderRadius: 12, alignSelf: 'flex-start' },
+  myIdLabel: { color: '#64748b', fontSize: 13 },
+  myIdValue: { color: '#334155', fontSize: 13, fontWeight: '600' },
+  addSection: { paddingHorizontal: 20, marginTop: -20 },
+  searchBar: { 
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', 
+    borderRadius: 16, paddingLeft: 16, paddingRight: 8, height: 56,
+    shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 
   },
-  addRow: {
-    flexDirection: "row",
-    gap: 8,
+  searchInput: { flex: 1, marginLeft: 10, fontSize: 16 },
+  addButton: { backgroundColor: '#6366f1', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
+  addButtonText: { color: '#fff', fontWeight: '700' },
+  errorText: { color: '#ef4444', marginTop: 8, textAlign: 'center', fontSize: 13 },
+  listContent: { padding: 20 },
+  friendItem: { 
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', 
+    padding: 16, borderRadius: 16, marginBottom: 12,
+    borderWidth: 1, borderColor: '#f1f5f9'
   },
-  addInput: {
-    flex: 1,
-  },
-  addButton: {
-    ...commonStyles.button,
-    minWidth: 76,
-  },
-  empty: {
-    color: "#64748b",
-    paddingTop: 32,
-    textAlign: "center",
-  },
-  list: {
-    gap: 10,
-    paddingBottom: 24,
-  },
-  myId: {
-    color: "#475569",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  rowText: {
-    flex: 1,
-  },
+  friendInfo: { flex: 1, marginLeft: 12 },
+  friendName: { fontSize: 17, fontWeight: '700', color: '#1e293b' },
+  friendId: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
+  emptyContainer: { alignItems: 'center', marginTop: 100 },
+  emptyText: { color: '#94a3b8', marginTop: 16, fontSize: 16 },
 });

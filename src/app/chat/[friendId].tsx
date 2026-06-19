@@ -15,6 +15,8 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore"; // 1. 新增此處
+import { db } from "../../services/firebase"; // 2. 確保匯入 db
 import { UserAvatar } from "../../components/UserAvatar";
 import { commonStyles } from "../../components/styles";
 import { useAuth } from "../../context/AuthContext";
@@ -38,34 +40,23 @@ export default function ChatRoomScreen() {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
 
-  console.log(`[ChatRoomScreen] Rendering: user=${user?.id}, friendId=${friendId}`);
-
   useFocusEffect(
     useCallback(() => {
-      console.log(`[ChatRoomScreen useFocusEffect] user=${user?.id}, friendId=${friendId}`);
-      if (!user || !friendId) {
-        console.log("[ChatRoomScreen useFocusEffect] Missing user or friendId, returning");
-        return;
-      }
+      if (!user || !friendId) return;
 
       let isActive = true;
 
       (async () => {
         try {
           const data = await getUserData(friendId);
-          if (isActive) {
-            setFriendData(data);
-          }
+          if (isActive) setFriendData(data);
         } catch (err) {
           console.error("Error loading friend data:", err);
         }
       })();
 
       const unsubscribe = listenToMessages(user.id, friendId, (newMessages) => {
-        console.log(`[ChatRoomScreen] listenToMessages callback received ${newMessages.length} messages`);
-        if (isActive) {
-          setMessages(newMessages);
-        }
+        if (isActive) setMessages(newMessages);
       });
 
       return () => {
@@ -82,22 +73,27 @@ export default function ChatRoomScreen() {
     );
   }, [messages]);
 
-  if (!user) {
-    return <Redirect href="/" />;
-  }
+  if (!user) return <Redirect href="/" />;
 
   const onSend = async () => {
-    if (!text.trim() || !friendId) return;
+    if (!text.trim() || !friendId || !user) return;
     const draft = text.trim();
-    console.log(`[onSend] Sending message from ${user?.id} to ${friendId}: "${draft}"`);
     setText("");
     setError("");
+
     try {
-      await sendMessageToFirestore(user!.id, friendId, draft);
-      console.log("[onSend] Message sent successfully");
+      // A. 發送訊息
+      await sendMessageToFirestore(user.id, friendId, draft);
+      
+      // B. 更新使用者的最後更新時間，這會觸發你 service 中的 onSnapshot 監聽器，讓左邊清單更新
+      await updateDoc(doc(db, "users", user.id), {
+        
+        lastUpdated: serverTimestamp()
+      });
+      
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Failed to send message";
-      console.error("[onSend] Error sending message:", errorMsg);
+      console.error("[onSend] Error:", errorMsg);
       setText(draft);
       setError(errorMsg);
     }
@@ -109,9 +105,8 @@ export default function ChatRoomScreen() {
       style={styles.container}
     >
       <Stack.Screen options={{ title: friendData?.name || "Chat" }} />
-      {error ? (
-        <Text style={[commonStyles.error, styles.error]}>{error}</Text>
-      ) : null}
+      {error ? <Text style={[commonStyles.error, styles.error]}>{error}</Text> : null}
+      
       <FlatList
         ref={messageListRef}
         contentContainerStyle={styles.messages}
@@ -122,50 +117,34 @@ export default function ChatRoomScreen() {
           return (
             <View style={[styles.bubbleRow, isMine && styles.myBubbleRow]}>
               {!isMine && friendData && (
-                <UserAvatar
-                  name={friendData.name}
-                  uri={friendData.avatar_url}
-                  size={32}
-                />
+                <UserAvatar name={friendData.name} uri={friendData.avatar_url} size={32} />
               )}
-              <View
-                style={[
-                  styles.bubble,
-                  isMine ? styles.myBubble : styles.friendBubble,
-                ]}
-              >
-                <Text
-                  style={[styles.messageText, isMine && styles.myMessageText]}
-                >
+              <View style={[styles.bubble, isMine ? styles.myBubble : styles.friendBubble]}>
+                <Text style={[styles.messageText, isMine && styles.myMessageText]}>
                   {item.text}
                 </Text>
-                <Text
-                  style={[styles.messageTime, isMine && styles.myMessageTime]}
-                >
+                <Text style={[styles.messageTime, isMine && styles.myMessageTime]}>
                   {formatTime(item.created_at)}
                 </Text>
               </View>
               {isMine && user && (
-                <UserAvatar
-                  name={user.name}
-                  uri={user.avatar_url}
-                  size={32}
-                />
+                <UserAvatar name={user.name} uri={user.avatar_url} size={32} />
               )}
             </View>
           );
         }}
       />
+
       <View style={styles.inputBar}>
         <TextInput
           multiline
-          placeholder="Type a message"
+          placeholder="請輸入發送內容"
           style={[commonStyles.input, styles.messageInput]}
           value={text}
           onChangeText={setText}
         />
         <Pressable style={styles.sendButton} onPress={onSend}>
-          <Text style={commonStyles.buttonText}>Send</Text>
+          <Text style={commonStyles.buttonText}>傳送</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -173,72 +152,19 @@ export default function ChatRoomScreen() {
 }
 
 const styles = StyleSheet.create({
-  bubble: {
-    borderRadius: 8,
-    maxWidth: "78%",
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  bubbleRow: {
-    alignItems: "flex-end",
-    flexDirection: "row",
-    gap: 8,
-  },
-  container: {
-    backgroundColor: "#f8fafc",
-    flex: 1,
-  },
-  error: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  friendBubble: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e2e8f0",
-    borderWidth: 1,
-  },
-  inputBar: {
-    alignItems: "flex-end",
-    backgroundColor: "#ffffff",
-    borderTopColor: "#e2e8f0",
-    borderTopWidth: 1,
-    flexDirection: "row",
-    gap: 8,
-    padding: 12,
-  },
-  messageInput: {
-    flex: 1,
-    maxHeight: 120,
-  },
-  messageText: {
-    color: "#0f172a",
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  messageTime: {
-    color: "#64748b",
-    fontSize: 11,
-    marginTop: 4,
-    textAlign: "right",
-  },
-  messages: {
-    gap: 10,
-    padding: 16,
-  },
-  myBubble: {
-    backgroundColor: "#2563eb",
-  },
-  myBubbleRow: {
-    justifyContent: "flex-end",
-  },
-  myMessageText: {
-    color: "#ffffff",
-  },
-  myMessageTime: {
-    color: "#dbeafe",
-  },
-  sendButton: {
-    ...commonStyles.button,
-    minWidth: 76,
-  },
+  bubble: { borderRadius: 8, maxWidth: "78%", paddingHorizontal: 12, paddingVertical: 9 },
+  bubbleRow: { alignItems: "flex-end", flexDirection: "row", gap: 8 },
+  container: { backgroundColor: "#f8fafc", flex: 1 },
+  error: { paddingHorizontal: 16, paddingTop: 12 },
+  friendBubble: { backgroundColor: "#ffffff", borderColor: "#e2e8f0", borderWidth: 1 },
+  inputBar: { alignItems: "flex-end", backgroundColor: "#ffffff", borderTopColor: "#e2e8f0", borderTopWidth: 1, flexDirection: "row", gap: 8, padding: 12 },
+  messageInput: { flex: 1, maxHeight: 120 },
+  messageText: { color: "#0f172a", fontSize: 16, lineHeight: 22 },
+  messageTime: { color: "#64748b", fontSize: 11, marginTop: 4, textAlign: "right" },
+  messages: { gap: 10, padding: 16 },
+  myBubble: { backgroundColor: "#2563eb" },
+  myBubbleRow: { justifyContent: "flex-end" },
+  myMessageText: { color: "#ffffff" },
+  myMessageTime: { color: "#dbeafe" },
+  sendButton: { ...commonStyles.button, minWidth: 76 },
 });

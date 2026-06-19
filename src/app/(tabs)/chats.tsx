@@ -1,108 +1,70 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { Screen } from "../../components/Screen";
-import { commonStyles } from "../../components/styles";
 import { UserAvatar } from "../../components/UserAvatar";
 import { useAuth } from "../../context/AuthContext";
 import { listenToChatsList } from "../../services/chats";
 import type { ChatSummary } from "../../types/chat";
-
-function formatTime(value: string | null) {
-  if (!value) return "尚無訊息";
-  const date = new Date(value);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffMins < 1) return "現在";
-  if (diffMins < 60) return `${diffMins}分鐘前`;
-  if (diffHours < 24) return `${diffHours}小時前`;
-  if (diffDays < 7) return `${diffDays}天前`;
-  
-  return date.toLocaleDateString();
-}
+import { Ionicons } from '@expo/vector-icons';
 
 export default function ChatsScreen() {
   const { user } = useAuth();
   const [chats, setChats] = useState<ChatSummary[]>([]);
-  const [error, setError] = useState("");
 
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
-
-      let isActive = true;
-
-      // 使用實時聊天列表監聽
-      const unsubscribe = listenToChatsList(user.id, (newChats) => {
-        if (isActive) {
-          setChats(newChats);
-        }
-      });
-
-      return () => {
-        isActive = false;
-        unsubscribe();
-      };
+      const unsubscribe = listenToChatsList(user.id, setChats);
+      return () => unsubscribe();
     }, [user]),
   );
 
   return (
-    <Screen>
-      {error ? <Text style={commonStyles.error}>{error}</Text> : null}
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>訊息</Text>
+      </View>
+
       <FlatList
-        contentContainerStyle={styles.list}
         data={chats}
         keyExtractor={(item) => item.friend.id}
+        contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <Text style={styles.empty}>聊天列表目前是空的</Text>
+          <View style={styles.emptyContainer}>
+            <Ionicons name="chatbubbles-outline" size={64} color="#cbd5e1" />
+            <Text style={styles.emptyText}>還沒有任何聊天訊息</Text>
+          </View>
         }
         renderItem={({ item }) => (
-          <Pressable
-            style={commonStyles.row}
-            onPress={() => router.push(`/chat/${item.friend.id}`)}
-          >
-            <UserAvatar name={item.friend.name} uri={item.friend.avatar_url} />
-            <View style={styles.rowText}>
-              <View style={styles.titleRow}>
-                <Text style={commonStyles.rowTitle}>{item.friend.name}</Text>
-                <Text style={styles.time}>{formatTime(item.last_time)}</Text>
+          <Pressable style={styles.chatItem} onPress={() => router.push(`/chat/${item.friend.id}`)}>
+            <UserAvatar name={item.friend.name} uri={item.friend.avatar_url} size={56} />
+            <View style={styles.chatInfo}>
+              <View style={styles.nameRow}>
+                <Text style={styles.name}>{item.friend.name}</Text>
+                <Text style={styles.time}>{item.last_time ? new Date(item.last_time).toLocaleDateString() : ""}</Text>
               </View>
-              <Text numberOfLines={1} style={commonStyles.rowMeta}>
+              <Text numberOfLines={1} style={styles.lastMsg}>
                 {item.last_message?.text ?? "點擊開始聊天"}
               </Text>
             </View>
           </Pressable>
         )}
       />
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  empty: {
-    color: "#64748b",
-    paddingTop: 32,
-    textAlign: "center",
-  },
-  list: {
-    gap: 10,
-    paddingBottom: 24,
-  },
-  rowText: {
-    flex: 1,
-  },
-  time: {
-    color: "#64748b",
-    fontSize: 12,
-  },
-  titleRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 8,
-    justifyContent: "space-between",
-  },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  header: { padding: 24, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#1e293b' },
+  listContent: { paddingVertical: 8 },
+  chatItem: { flexDirection: 'row', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f8fafc' },
+  chatInfo: { flex: 1, marginLeft: 16, justifyContent: 'center' },
+  nameRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  name: { fontSize: 17, fontWeight: '700', color: '#1e293b' },
+  time: { fontSize: 12, color: '#94a3b8' },
+  lastMsg: { fontSize: 14, color: '#64748b' },
+  emptyContainer: { alignItems: 'center', marginTop: 150 },
+  emptyText: { color: '#94a3b8', marginTop: 16, fontSize: 16 },
 });
