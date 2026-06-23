@@ -242,3 +242,20 @@ export async function removeFriend(userId: string, friendId: string): Promise<vo
     throw error;
   }
 }
+
+/**
+ * 強制將兩個 userId 設為好友（雙向）
+ * 可用於調試或修復資料不一致的情況
+ */
+export async function forceMakeFriends(userIdA: string, userIdB: string): Promise<void> {
+  try {
+    const aRef = doc(db, "users", userIdA);
+    const bRef = doc(db, "users", userIdB);
+
+    await updateDoc(aRef, { friends: arrayUnion(userIdB) });
+    await updateDoc(bRef, { friends: arrayUnion(userIdA) });
+  } catch (error) {
+    console.error("Error forcing friendship:", error);
+    throw error;
+  }
+}

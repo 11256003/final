@@ -21,7 +21,7 @@ import { UserAvatar } from "../../components/UserAvatar";
 import { commonStyles } from "../../components/styles";
 import { useAuth } from "../../context/AuthContext";
 import { getUserData } from "../../services/firestore";
-import { listenToMessages, sendMessageToFirestore } from "../../services/messages";
+import { listenToMessages, sendMessageToFirestore, addReadReceipt, listenToMessageReadStatus } from "../../services/messages";
 import type { Message, User } from "../../types/chat";
 
 function formatTime(value: string) {
@@ -39,6 +39,7 @@ export default function ChatRoomScreen() {
   const [friendData, setFriendData] = useState<User | null>(null);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
+  const [readMessageIds, setReadMessageIds] = useState<Set<string>>(new Set());
 
   useFocusEffect(
     useCallback(() => {
@@ -55,8 +56,29 @@ export default function ChatRoomScreen() {
         }
       })();
 
-      const unsubscribe = listenToMessages(user.id, friendId, (newMessages) => {
-        if (isActive) setMessages(newMessages);
+      const unsubscribe = listenToMessages(user.id, friendId, async (newMessages) => {
+        if (isActive) {
+          setMessages(newMessages);
+          
+          // 接收方：對所有對方發來的訊息新增讀取紀錄
+          for (const msg of newMessages) {
+            if (msg.sender_id === friendId && msg.receiver_id === user.id) {
+              await addReadReceipt(msg.id, user.id);
+            }
+          }
+          
+          // 監聽所有自己發出去訊息的已讀狀態
+          const readIds = new Set<string>();
+          for (const msg of newMessages) {
+            if (msg.sender_id === user.id) {
+              const unsubRead = listenToMessageReadStatus(msg.id, (isRead) => {
+                if (isRead) {
+                  setReadMessageIds(prev => new Set([...prev, msg.id]));
+                }
+              });
+            }
+          }
+        }
       });
 
       return () => {
@@ -114,6 +136,7 @@ export default function ChatRoomScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
           const isMine = item.sender_id === user.id;
+          const isRead = readMessageIds.has(item.id);
           return (
             <View style={[styles.bubbleRow, isMine && styles.myBubbleRow]}>
               {!isMine && friendData && (
@@ -123,9 +146,16 @@ export default function ChatRoomScreen() {
                 <Text style={[styles.messageText, isMine && styles.myMessageText]}>
                   {item.text}
                 </Text>
-                <Text style={[styles.messageTime, isMine && styles.myMessageTime]}>
-                  {formatTime(item.created_at)}
-                </Text>
+                <View style={styles.messageFooter}>
+                  <Text style={[styles.messageTime, isMine && styles.myMessageTime]}>
+                    {formatTime(item.created_at)}
+                  </Text>
+                  {isMine && (
+                    <Text style={[styles.readMark, isRead ? styles.readMarkRead : styles.readMarkUnread]}>
+                      {isRead ? "✓✓" : "✓"}
+                    </Text>
+                  )}
+                </View>
               </View>
               {isMine && user && (
                 <UserAvatar name={user.name} uri={user.avatar_url} size={32} />
@@ -160,7 +190,11 @@ const styles = StyleSheet.create({
   inputBar: { alignItems: "flex-end", backgroundColor: "#ffffff", borderTopColor: "#e2e8f0", borderTopWidth: 1, flexDirection: "row", gap: 8, padding: 12 },
   messageInput: { flex: 1, maxHeight: 120 },
   messageText: { color: "#0f172a", fontSize: 16, lineHeight: 22 },
-  messageTime: { color: "#64748b", fontSize: 11, marginTop: 4, textAlign: "right" },
+  messageTime: { color: "#64748b", fontSize: 11, marginTop: 4 },
+  messageFooter: { alignItems: "center", flexDirection: "row", gap: 4, justifyContent: "flex-end", marginTop: 4 },
+  readMark: { fontSize: 10, marginLeft: 2 },
+  readMarkRead: { color: "#dbeafe" },
+  readMarkUnread: { color: "#94a3b8" },
   messages: { gap: 10, padding: 16 },
   myBubble: { backgroundColor: "#2563eb" },
   myBubbleRow: { justifyContent: "flex-end" },
