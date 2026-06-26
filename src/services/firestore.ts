@@ -254,8 +254,46 @@ export async function forceMakeFriends(userIdA: string, userIdB: string): Promis
 
     await updateDoc(aRef, { friends: arrayUnion(userIdB) });
     await updateDoc(bRef, { friends: arrayUnion(userIdA) });
+    console.log(`[forceMakeFriends] Successfully made ${userIdA} and ${userIdB} friends`);
   } catch (error) {
     console.error("Error forcing friendship:", error);
+    throw error;
+  }
+}
+
+/**
+ * 檢查並修復朋友列表一致性
+ */
+export async function verifyAndFixFriendship(userIdA: string, userIdB: string): Promise<{ isBidirectional: boolean }> {
+  try {
+    const aRef = doc(db, "users", userIdA);
+    const bRef = doc(db, "users", userIdB);
+
+    const aDoc = await getDoc(aRef);
+    const bDoc = await getDoc(bRef);
+
+    if (!aDoc.exists() || !bDoc.exists()) {
+      throw new Error("One or both users do not exist");
+    }
+
+    const aFriends = aDoc.data().friends || [];
+    const bFriends = bDoc.data().friends || [];
+
+    const aHasB = aFriends.includes(userIdB);
+    const bHasA = bFriends.includes(userIdA);
+
+    console.log(`[verifyAndFixFriendship] A has B: ${aHasB}, B has A: ${bHasA}`);
+
+    // 如果不是雙向，修復它
+    if (!aHasB || !bHasA) {
+      console.log(`[verifyAndFixFriendship] Fixing friendship...`);
+      await forceMakeFriends(userIdA, userIdB);
+      return { isBidirectional: true };
+    }
+
+    return { isBidirectional: true };
+  } catch (error) {
+    console.error("[verifyAndFixFriendship] Error:", error);
     throw error;
   }
 }

@@ -1,23 +1,39 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback } from "react";
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { UserAvatar } from "../../components/UserAvatar";
 import { useAuth } from "../../context/AuthContext";
-import { listenToChatsList } from "../../services/chats";
-import type { ChatSummary } from "../../types/chat";
-import { Ionicons } from '@expo/vector-icons';
+import { getChatsList } from "../../services/chats";
 
 export default function ChatsScreen() {
-  const { user } = useAuth();
-  const [chats, setChats] = useState<ChatSummary[]>([]);
+  const { user, chats } = useAuth();
 
+  // 頁面獲得焦點時，強制刷新聊天列表
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
-      const unsubscribe = listenToChatsList(user.id, setChats);
-      return () => unsubscribe();
-    }, [user]),
+      
+      // 從 Firestore 直接重新加載一次，確保數據最新
+      getChatsList(user.id)
+        .then((latestChats) => {
+          console.log(`[ChatsScreen] Focused - refreshed ${latestChats.length} chats`);
+        })
+        .catch((err) => {
+          console.error("[ChatsScreen] Error refreshing chats on focus:", err);
+        });
+    }, [user])
   );
+
+  const onRefresh = useCallback(async () => {
+    if (!user) return;
+    try {
+      const latestChats = await getChatsList(user.id);
+      console.log(`[ChatsScreen] Pull-to-refresh loaded ${latestChats.length} chats`);
+    } catch (error) {
+      console.error("[ChatsScreen] Error refreshing chats:", error);
+    }
+  }, [user]);
 
   return (
     <View style={styles.container}>
@@ -29,6 +45,9 @@ export default function ChatsScreen() {
         data={chats}
         keyExtractor={(item) => item.friend.id}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={false} onRefresh={onRefresh} />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="chatbubbles-outline" size={64} color="#cbd5e1" />

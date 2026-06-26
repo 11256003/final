@@ -1,8 +1,9 @@
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
-import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from "react";
+import { doc, getDoc, setDoc, Unsubscribe, updateDoc } from "firebase/firestore";
+import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { listenToChatsList } from "../services/chats";
 import { auth, db } from "../services/firebase";
-import type { User } from "../types/chat";
+import type { ChatSummary, User } from "../types/chat";
 
 type AuthContextValue = {
   user: User | null;
@@ -12,6 +13,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: User) => void;
+  chats: ChatSummary[];
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -20,6 +22,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [chats, setChats] = useState<ChatSummary[]>([]);
+  const unsubscribeChatsRef = useRef<Unsubscribe | null>(null);
+
+  // 啟動聊天列表監聽器
+  const startChatsListener = (userId: string) => {
+    // 停止之前的監聽器（如果存在）
+    if (unsubscribeChatsRef.current) {
+      unsubscribeChatsRef.current();
+    }
+    // 啟動新的監聽器
+    unsubscribeChatsRef.current = listenToChatsList(userId, setChats);
+    console.log(`[AuthContext] Started listening to chats for user ${userId}`);
+  };
+
+  // 停止聊天列表監聽器
+  const stopChatsListener = () => {
+    if (unsubscribeChatsRef.current) {
+      unsubscribeChatsRef.current();
+      unsubscribeChatsRef.current = null;
+      console.log(`[AuthContext] Stopped listening to chats`);
+    }
+  };
 
   // 監聽 Firebase 認證狀態變化
   useEffect(() => {
@@ -32,17 +56,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
           
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            setUser({
+            const userState: User = {
               id: firebaseUser.uid,
               username: userData.username,
               name: userData.name,
               birthday: userData.birthday || null,
               avatar_url: userData.avatar_url || null,
               created_at: userData.created_at,
-            });
+            };
+            setUser(userState);
+            console.log(`[AuthContext] User authenticated: ${firebaseUser.uid}`);
+            // 只在 onAuthStateChanged 中啟動監聽器
+            startChatsListener(firebaseUser.uid);
           }
         } else {
           setUser(null);
+          setChats([]);
+          stopChatsListener();
+          console.log(`[AuthContext] User logged out`);
         }
         setError(null);
       } catch (err) {
@@ -53,7 +84,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      stopChatsListener();
+    };
   }, []);
 
   // 註冊新用戶
@@ -78,16 +112,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       };
 
       await setDoc(doc(db, "users", firebaseUser.uid), userData);
-
-      // 設定 user state
-      setUser({
-        id: firebaseUser.uid,
-        username,
-        name,
-        birthday: null,
-        avatar_url: null,
-        created_at: userData.created_at,
-      });
+      console.log(`[AuthContext] User registered: ${firebaseUser.uid}`);
+      // onAuthStateChanged 會自動觸發並啟動監聽器
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Registration failed";
       setError(errorMessage);
@@ -105,6 +131,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
+      console.log(`[AuthContext] User logged in: ${firebaseUser.uid}`);
 
       // 從 Firestore 獲取用戶資料
       const userDocRef = doc(db, "users", firebaseUser.uid);
@@ -117,16 +144,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!userData.friends) {
           await updateDoc(userDocRef, { friends: [] });
         }
-
-        setUser({
-          id: firebaseUser.uid,
-          username: userData.username,
-          name: userData.name,
-          birthday: userData.birthday || null,
-          avatar_url: userData.avatar_url || null,
-          created_at: userData.created_at,
-        });
       }
+      // onAuthStateChanged 會自動觸發並啟動監聽器
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Login failed";
       setError(errorMessage);
@@ -161,8 +180,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       login,
       logout,
       setUser,
+      chats,
     }),
-    [user, loading, error],
+    [user, loading, error, chats],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

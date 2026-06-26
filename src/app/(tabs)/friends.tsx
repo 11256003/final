@@ -1,11 +1,12 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { UserAvatar } from "../../components/UserAvatar";
 import { useAuth } from "../../context/AuthContext";
-import { addFriendByUsername, getFriendsList } from "../../services/firestore";
+import { getChatsList } from "../../services/chats";
+import { addFriendByUsername, getFriendsList, verifyAndFixFriendship } from "../../services/firestore";
 import type { User } from "../../types/chat";
-import { Ionicons } from '@expo/vector-icons';
 
 export default function FriendsScreen() {
   const { user } = useAuth();
@@ -29,11 +30,39 @@ export default function FriendsScreen() {
     if (!user || !friendUsername.trim()) return;
     setError("");
     try {
-      await addFriendByUsername(user.id, friendUsername.trim());
+      const friendIdOrUsername = friendUsername.trim();
+      
+      // Step 1: 添加好友
+      console.log(`[FriendsScreen] Adding friend: ${friendIdOrUsername}`);
+      await addFriendByUsername(user.id, friendIdOrUsername);
+      console.log(`[FriendsScreen] Successfully added friend`);
+      
+      // Step 2: 等待 Firestore 同步
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Step 3: 嘗試從好友名單中找到該好友
+      const updatedFriends = await getFriendsList(user.id);
+      const addedFriend = updatedFriends.find(f => 
+        f.id === friendIdOrUsername || f.username === friendIdOrUsername
+      );
+      
+      if (addedFriend) {
+        // Step 4: 驗證並修復雙向關係
+        console.log(`[FriendsScreen] Verifying friendship with ${addedFriend.id}`);
+        await verifyAndFixFriendship(user.id, addedFriend.id);
+        console.log(`[FriendsScreen] Friendship verified and fixed`);
+      }
+      
       setFriendUsername("");
+      
+      // Step 5: 刷新好友列表和聊天列表
       await loadFriends();
+      const chats = await getChatsList(user.id);
+      console.log(`[FriendsScreen] Final chat count: ${chats.length} chats`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加入失敗");
+      const errorMsg = err instanceof Error ? err.message : "加入失敗";
+      console.error(`[FriendsScreen] Error adding friend:`, errorMsg);
+      setError(errorMsg);
     }
   };
 
