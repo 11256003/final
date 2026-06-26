@@ -34,6 +34,7 @@ export async function getChatsList(userId: string): Promise<ChatSummary[]> {
         name: friendDoc.data().name,
         birthday: friendDoc.data().birthday || null,
         avatar_url: friendDoc.data().avatar_url || null,
+        bio: friendDoc.data().bio || null,
         created_at: friendDoc.data().created_at,
       };
 
@@ -133,6 +134,7 @@ export function listenToChatsList(userId: string, callback: (chats: ChatSummary[
                 name: friendDoc.data().name,
                 birthday: friendDoc.data().birthday || null,
                 avatar_url: friendDoc.data().avatar_url || null,
+                bio: friendDoc.data().bio || null,
                 created_at: friendDoc.data().created_at,
               };
 

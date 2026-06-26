@@ -4,6 +4,7 @@ export type User = {
   name: string;
   birthday: string | null;
   avatar_url: string | null;
+  bio: string | null;
   created_at: string;
 };
 
@@ -35,5 +36,5 @@ export type LoginInput = {
 export type ProfileInput = {
   name: string;
   birthday: string | null;
-  avatar_url: string | null;
+  bio: string | null;
 };

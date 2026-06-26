@@ -62,6 +62,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
               name: userData.name,
               birthday: userData.birthday || null,
               avatar_url: userData.avatar_url || null,
+              bio: userData.bio || null,
               created_at: userData.created_at,
             };
             setUser(userState);
@@ -107,6 +108,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         email,
         birthday: null,
         avatar_url: null,
+        bio: null,
         created_at: new Date().toISOString(),
         friends: [],
       };

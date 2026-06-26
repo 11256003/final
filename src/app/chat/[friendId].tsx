@@ -4,6 +4,7 @@ import {
   useFocusEffect,
   useLocalSearchParams,
 } from "expo-router";
+import { doc, serverTimestamp, updateDoc } from "firebase/firestore"; // 1. 新增此處
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FlatList,
@@ -15,13 +16,12 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore"; // 1. 新增此處
-import { db } from "../../services/firebase"; // 2. 確保匯入 db
 import { UserAvatar } from "../../components/UserAvatar";
 import { commonStyles } from "../../components/styles";
 import { useAuth } from "../../context/AuthContext";
+import { db } from "../../services/firebase"; // 2. 確保匯入 db
 import { getUserData } from "../../services/firestore";
-import { listenToMessages, sendMessageToFirestore, addReadReceipt, listenToMessageReadStatus } from "../../services/messages";
+import { addReadReceipt, listenToMessageReadStatus, listenToMessages, sendMessageToFirestore } from "../../services/messages";
 import type { Message, User } from "../../types/chat";
 
 function formatTime(value: string) {
