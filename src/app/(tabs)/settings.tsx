@@ -1,12 +1,49 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { updatePassword } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal, ActivityIndicator } from "react-native";
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { UserAvatar } from "../../components/UserAvatar";
 import { useAuth } from "../../context/AuthContext";
 import { auth, db } from "../../services/firebase";
-import { Ionicons } from '@expo/vector-icons';
+
+const canDisplayAvatarUri = (uri: string) =>
+  uri.startsWith("data:") || uri.startsWith("blob:") || uri.startsWith("http://") || uri.startsWith("https://");
+
+const readFileAsDataUrl = (file: globalThis.File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read image file"));
+    reader.readAsDataURL(file);
+  });
+
+const resizeAvatarDataUrl = (dataUrl: string) =>
+  new Promise<string>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const size = 160;
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        reject(new Error("Canvas is not available"));
+        return;
+      }
+
+      const sourceSize = Math.min(image.width, image.height);
+      const sourceX = (image.width - sourceSize) / 2;
+      const sourceY = (image.height - sourceSize) / 2;
+      context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, size, size);
+      resolve(canvas.toDataURL("image/jpeg", 0.72));
+    };
+    image.onerror = () => reject(new Error("Failed to resize avatar image"));
+    image.src = dataUrl;
+  });
 
 export default function SettingsScreen() {
   const { user, setUser, logout } = useAuth();
@@ -14,7 +51,8 @@ export default function SettingsScreen() {
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url ?? "");
   const [newPassword, setNewPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [updatingPassword, setUpdatingPassword] = useState(false); 
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const [isConfirmModalVisible, setConfirmModalVisible] = useState(false);
 
@@ -24,8 +62,15 @@ export default function SettingsScreen() {
     setLoading(true);
     try {
       const userRef = doc(db, "users", user.id);
-      await updateDoc(userRef, { name, avatar_url: avatarUrl || null });
-      setUser({ ...user, name, avatar_url: avatarUrl || null });
+      const trimmedAvatarUrl = avatarUrl.trim();
+      const avatarForFirestore = trimmedAvatarUrl && canDisplayAvatarUri(trimmedAvatarUrl) ? trimmedAvatarUrl : null;
+
+      await updateDoc(userRef, { name, avatar_url: avatarForFirestore });
+      setUser({
+        ...user,
+        name,
+        avatar_url: trimmedAvatarUrl && canDisplayAvatarUri(trimmedAvatarUrl) ? trimmedAvatarUrl : null,
+      });
       if (Platform.OS === 'web') {
         window.alert("個人資料已更新！");
       } else {
@@ -36,6 +81,68 @@ export default function SettingsScreen() {
       else Alert.alert("錯誤", "儲存失敗");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 選擇並上傳頭像圖片
+  const onPickImage = async () => {
+    try {
+      setUploadingAvatar(true);
+      
+      // 請求相冊權限
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("權限", "需要相冊訪問權限才能選擇圖片");
+        setUploadingAvatar(false);
+        return;
+      }
+
+      // 打開圖片選擇器
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: Platform.OS === "web",
+      });
+
+      if (result.canceled || !result.assets[0]) {
+        setUploadingAvatar(false);
+        return;
+      }
+
+      const asset = result.assets[0];
+      const imageDataUrl =
+        Platform.OS === "web" && asset.file
+          ? await readFileAsDataUrl(asset.file)
+          : Platform.OS === "web" && asset.base64
+          ? `data:${asset.mimeType ?? "image/jpeg"};base64,${asset.base64}`
+          : asset.uri;
+      console.log("選擇的圖片:", imageDataUrl);
+      
+      // Store a small avatar data URL in Firestore so it can sync without Storage.
+      if (!user) {
+        setUploadingAvatar(false);
+        return;
+      }
+
+      const avatarForFirestore =
+        Platform.OS === "web" && imageDataUrl.startsWith("data:")
+          ? await resizeAvatarDataUrl(imageDataUrl)
+          : imageDataUrl;
+
+      await updateDoc(doc(db, "users", user.id), { avatar_url: avatarForFirestore });
+      setAvatarUrl(avatarForFirestore);
+      setUser({ ...user, avatar_url: avatarForFirestore });
+
+      if (Platform.OS === "web") window.alert("頭像已更新並同步");
+      else Alert.alert("成功", "頭像已更新並同步");
+    } catch (err: any) {
+      console.error("圖片上傳失敗:", err);
+      const errorMsg = err.message || "圖片上傳失敗，請稍後重試";
+      Alert.alert("錯誤", errorMsg);
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -88,7 +195,7 @@ export default function SettingsScreen() {
     <View style={{ flex: 1 }}>
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <UserAvatar name={name} uri={avatarUrl} size={100} />
+        <UserAvatar name={name} uri={canDisplayAvatarUri(avatarUrl.trim()) ? avatarUrl.trim() : null} size={100} />
         <Text style={styles.profileName}>{user?.name}</Text>
         <Text style={styles.profileId}>ID: {user?.id}</Text>
       </View>
@@ -103,6 +210,23 @@ export default function SettingsScreen() {
           <Text style={styles.label}>頭像圖片網址</Text>
           <TextInput style={styles.input} value={avatarUrl} onChangeText={setAvatarUrl} />
         </View>
+        <Pressable 
+          style={uploadingAvatar ? styles.disabledSaveButton : styles.pickImageButton} 
+          onPress={onPickImage} 
+          disabled={uploadingAvatar}
+        >
+          {uploadingAvatar ? (
+            <>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={styles.buttonText} numberOfLines={1}>上傳中...</Text>
+            </>
+          ) : (
+            <>
+              <Ionicons name="image-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.buttonText}>選擇圖片</Text>
+            </>
+          )}
+        </Pressable>
         <Pressable style={loading ? styles.disabledSaveButton : styles.saveButton} onPress={onSave} disabled={loading}>
           {loading ? (
             <ActivityIndicator size="small" color="#fff" />
@@ -198,6 +322,7 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#f1f5f9', borderRadius: 12, padding: 12, fontSize: 16 },
   saveButton: { backgroundColor: '#6366f1', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52 },
   disabledSaveButton: { backgroundColor: '#a1a4f0', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52, opacity: 0.7 },
+  pickImageButton: { backgroundColor: '#10b981', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52, flexDirection: 'row', justifyContent: 'center' },
   disabledPasswordUpdateButton: { backgroundColor: '#a8b0c2', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52, opacity: 0.7 },
   buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   logoutButton: { 

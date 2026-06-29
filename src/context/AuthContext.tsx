@@ -5,6 +5,10 @@ import { listenToChatsList } from "../services/chats";
 import { auth, db } from "../services/firebase";
 import type { ChatSummary, User } from "../types/chat";
 
+const canDisplayAvatarUrl = (url: unknown) =>
+  typeof url === "string" &&
+  (url.startsWith("data:") || url.startsWith("http://") || url.startsWith("https://"));
+
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
@@ -61,7 +65,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
               username: userData.username,
               name: userData.name,
               birthday: userData.birthday || null,
-              avatar_url: userData.avatar_url || null,
+              avatar_url: canDisplayAvatarUrl(userData.avatar_url) ? userData.avatar_url : null,
               created_at: userData.created_at,
             };
             setUser(userState);
