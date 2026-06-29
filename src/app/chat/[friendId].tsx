@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Redirect, Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
@@ -15,13 +16,13 @@ import {
 import { UserAvatar } from "../../components/UserAvatar";
 import { commonStyles } from "../../components/styles";
 import { useAuth } from "../../context/AuthContext";
+import { markChatAsRead } from "../../services/chats";
 import { db } from "../../services/firebase";
 import { getUserData } from "../../services/firestore";
 import {
   addReadReceipt,
   listenToMessageReadStatus,
   listenToMessages,
-  markConversationAsRead,
   sendMessageToFirestore,
 } from "../../services/messages";
 import type { Message, User } from "../../types/chat";
@@ -61,25 +62,30 @@ export default function ChatRoomScreen() {
         }
       })();
 
-      void markConversationAsRead(user.id, friendId).catch((err) => {
-        console.error("Failed to mark conversation as read:", err);
+      // ✨ 確保進入聊天室時，觸發我們寫好的批次標記已讀，將未讀計數完美歸零
+      void markChatAsRead(user.id, friendId).catch((err) => {
+        console.error("Failed to mark chat as read:", err);
       });
 
       const unsubscribe = listenToMessages(user.id, friendId, async (newMessages) => {
         if (!isActive) return;
         setMessages(newMessages);
 
+        // 如果在聊天室內收到新訊息，立刻標記為已讀
         for (const msg of newMessages) {
           if (msg.sender_id === friendId && msg.receiver_id === user.id && !markedAsReadRef.current.has(msg.id)) {
             markedAsReadRef.current.add(msg.id);
             try {
               await addReadReceipt(msg.id, user.id);
+              // 同時更新聊天列表的未讀狀態
+              void markChatAsRead(user.id, friendId);
             } catch (err) {
               console.error("Failed to add read receipt:", err);
             }
           }
         }
 
+        // 監聽自己發送出去的訊息是否被對方已讀
         for (const msg of newMessages) {
           if (msg.sender_id !== user.id || readListenersRef.current.has(msg.id)) continue;
 
@@ -151,7 +157,8 @@ export default function ChatRoomScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
           const isMine = item.sender_id === user.id;
-          const isRead = readMessageIds.has(item.id);
+          // 結合新資料的狀態與本地監聽的已讀狀態
+          const isRead = item.isRead || readMessageIds.has(item.id);
 
           return (
             <View style={[styles.bubbleRow, isMine && styles.myBubbleRow]}>
@@ -161,7 +168,12 @@ export default function ChatRoomScreen() {
 
               {isMine && (
                 <View style={styles.statusContainerRight}>
-                  {isRead && <Text style={styles.chatStatusText}>已讀</Text>}
+                  {/* ✨ 在這裡加入打勾圖示：已讀藍色雙勾，未讀灰色單勾 */}
+                  {isRead ? (
+                    <Ionicons name="checkmark-done" size={16} color="#3b82f6" style={styles.checkIcon} />
+                  ) : (
+                    <Ionicons name="checkmark" size={16} color="#94a3b8" style={styles.checkIcon} />
+                  )}
                   <Text style={styles.messageTime}>{formatTime(item.created_at)}</Text>
                 </View>
               )}
@@ -209,11 +221,8 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     marginBottom: 2,
   },
-  chatStatusText: {
-    fontSize: 11,
-    color: "#94a3b8",
+  checkIcon: {
     marginBottom: 2,
-    fontWeight: "600",
   },
   messageTime: {
     color: "#94a3b8",
