@@ -32,7 +32,7 @@ export default function SettingsScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
@@ -250,6 +250,7 @@ const styles = StyleSheet.create({
   inputGroup: { marginBottom: 16 },
   label: { fontSize: 14, color: '#64748b', marginBottom: 8 },
   input: { backgroundColor: '#f1f5f9', borderRadius: 12, padding: 12, fontSize: 16 },
+  bioInput: { minHeight: 100, textAlignVertical: 'top' },
   saveButton: { backgroundColor: '#6366f1', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52 },
   disabledSaveButton: { backgroundColor: '#a1a4f0', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52, opacity: 0.7 },
   disabledPasswordUpdateButton: { backgroundColor: '#a8b0c2', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52, opacity: 0.7 },
