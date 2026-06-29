@@ -8,6 +8,7 @@ import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, Style
 import { UserAvatar } from "../../components/UserAvatar";
 import { useAuth } from "../../context/AuthContext";
 import { auth, db } from "../../services/firebase";
+<<<<<<< HEAD
 
 const canDisplayAvatarUri = (uri: string) =>
   uri.startsWith("data:") || uri.startsWith("blob:") || uri.startsWith("http://") || uri.startsWith("https://");
@@ -44,11 +45,16 @@ const resizeAvatarDataUrl = (dataUrl: string) =>
     image.onerror = () => reject(new Error("Failed to resize avatar image"));
     image.src = dataUrl;
   });
+=======
+import { uploadProfileImage } from "../../services/storage";
+>>>>>>> eeea12603e14ed1fc4a85921c8a2bcbc2778869c
 
 export default function SettingsScreen() {
   const { user, setUser, logout } = useAuth();
   const [name, setName] = useState(user?.name ?? "");
+  const [bio, setBio] = useState(user?.bio ?? "");
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url ?? "");
+  const [localAvatarUri, setLocalAvatarUri] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [updatingPassword, setUpdatingPassword] = useState(false);
@@ -56,12 +62,35 @@ export default function SettingsScreen() {
 
   const [isConfirmModalVisible, setConfirmModalVisible] = useState(false);
 
+  const pickAvatarImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      const message = "需要相簿權限才能更換頭貼。";
+      if (Platform.OS === "web") window.alert(message);
+      else Alert.alert("權限不足", message);
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets.length > 0) {
+      setLocalAvatarUri(result.assets[0].uri);
+      setAvatarUrl(result.assets[0].uri);
+    }
+  };
+
   // 儲存個人資料
   const onSave = async () => {
     if (!user) return;
     setLoading(true);
     try {
       const userRef = doc(db, "users", user.id);
+<<<<<<< HEAD
       const trimmedAvatarUrl = avatarUrl.trim();
       const avatarForFirestore = trimmedAvatarUrl && canDisplayAvatarUri(trimmedAvatarUrl) ? trimmedAvatarUrl : null;
 
@@ -71,13 +100,31 @@ export default function SettingsScreen() {
         name,
         avatar_url: trimmedAvatarUrl && canDisplayAvatarUri(trimmedAvatarUrl) ? trimmedAvatarUrl : null,
       });
+=======
+      let remoteAvatarUrl = user.avatar_url || null;
+
+      if (localAvatarUri) {
+        remoteAvatarUrl = await uploadProfileImage(user.id, localAvatarUri);
+      }
+
+      await updateDoc(userRef, {
+        name,
+        bio: bio || null,
+        avatar_url: remoteAvatarUrl || null,
+      });
+
+      setUser({ ...user, name, bio: bio || null, avatar_url: remoteAvatarUrl || null });
+      setLocalAvatarUri(null);
+      setAvatarUrl(remoteAvatarUrl || "");
+
+>>>>>>> eeea12603e14ed1fc4a85921c8a2bcbc2778869c
       if (Platform.OS === 'web') {
         window.alert("個人資料已更新！");
       } else {
         Alert.alert("成功", "個人資料已更新");
       }
-    } catch (err) { 
-      if (Platform.OS === 'web') window.alert("儲存失敗"); 
+    } catch (err) {
+      if (Platform.OS === 'web') window.alert("儲存失敗");
       else Alert.alert("錯誤", "儲存失敗");
     } finally {
       setLoading(false);
@@ -195,8 +242,16 @@ export default function SettingsScreen() {
     <View style={{ flex: 1 }}>
     <ScrollView style={styles.container}>
       <View style={styles.header}>
+<<<<<<< HEAD
         <UserAvatar name={name} uri={canDisplayAvatarUri(avatarUrl.trim()) ? avatarUrl.trim() : null} size={100} />
+=======
+        <UserAvatar name={name} uri={avatarUrl || undefined} size={100} />
+>>>>>>> eeea12603e14ed1fc4a85921c8a2bcbc2778869c
         <Text style={styles.profileName}>{user?.name}</Text>
+        <Text style={styles.profileBio}>{user?.bio || "請輸入你的自我介紹"}</Text>
+        <Pressable style={styles.avatarButton} onPress={pickAvatarImage}>
+          <Text style={styles.avatarButtonText}>更換頭貼</Text>
+        </Pressable>
         <Text style={styles.profileId}>ID: {user?.id}</Text>
       </View>
 
@@ -207,8 +262,15 @@ export default function SettingsScreen() {
           <TextInput style={styles.input} value={name} onChangeText={setName} />
         </View>
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>頭像圖片網址</Text>
-          <TextInput style={styles.input} value={avatarUrl} onChangeText={setAvatarUrl} />
+          <Text style={styles.label}>自我介紹</Text>
+          <TextInput
+            style={[styles.input, styles.bioInput]}
+            value={bio}
+            onChangeText={setBio}
+            multiline
+            placeholder="介紹一下自己"
+            numberOfLines={4}
+          />
         </View>
         <Pressable 
           style={uploadingAvatar ? styles.disabledSaveButton : styles.pickImageButton} 
@@ -314,12 +376,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   header: { alignItems: 'center', paddingVertical: 40, backgroundColor: '#fff' },
   profileName: { fontSize: 24, fontWeight: '800', color: '#1e293b', marginTop: 16 },
+  profileBio: { fontSize: 14, color: '#64748b', marginTop: 8, textAlign: 'center', maxWidth: '80%' },
+  avatarButton: { marginTop: 12, backgroundColor: '#e2e8f0', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
+  avatarButtonText: { color: '#1e293b', fontWeight: '700' },
   profileId: { fontSize: 14, color: '#94a3b8', marginTop: 4 },
   section: { backgroundColor: '#fff', marginTop: 20, padding: 20 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#6366f1', marginBottom: 20 },
   inputGroup: { marginBottom: 16 },
   label: { fontSize: 14, color: '#64748b', marginBottom: 8 },
   input: { backgroundColor: '#f1f5f9', borderRadius: 12, padding: 12, fontSize: 16 },
+  bioInput: { minHeight: 100, textAlignVertical: 'top' },
   saveButton: { backgroundColor: '#6366f1', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52 },
   disabledSaveButton: { backgroundColor: '#a1a4f0', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52, opacity: 0.7 },
   pickImageButton: { backgroundColor: '#10b981', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52, flexDirection: 'row', justifyContent: 'center' },

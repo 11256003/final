@@ -105,7 +105,7 @@ export default function FriendsScreen() {
         }
         renderItem={({ item }) => (
           <Pressable style={styles.friendItem} onPress={() => router.push(`/chat/${item.id}`)}>
-            <UserAvatar name={item.name} uri={item.avatar_url} size={50} />
+            <UserAvatar name={item.name} uri={item.avatar_url ?? undefined} size={50} />
             <View style={styles.friendInfo}>
               <Text style={styles.friendName}>{item.name}</Text>
               <Text style={styles.friendId}>ID: {item.id}</Text>

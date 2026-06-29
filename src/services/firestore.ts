@@ -16,6 +16,7 @@ export async function getUserData(userId: string): Promise<User | null> {
         name: data.name,
         birthday: data.birthday || null,
         avatar_url: data.avatar_url || null,
+        bio: data.bio || null,
         created_at: data.created_at,
       };
     }
@@ -49,6 +50,7 @@ export async function searchUser(query_text: string, currentUserId?: string): Pr
           name: data.name,
           birthday: data.birthday || null,
           avatar_url: data.avatar_url || null,
+          bio: data.bio || null,
           created_at: data.created_at,
         };
       }
@@ -73,6 +75,7 @@ export async function searchUser(query_text: string, currentUserId?: string): Pr
           name: data.name,
           birthday: data.birthday || null,
           avatar_url: data.avatar_url || null,
+          bio: data.bio || null,
           created_at: data.created_at,
         };
       }
@@ -98,6 +101,7 @@ export async function searchUser(query_text: string, currentUserId?: string): Pr
           name: data.name,
           birthday: data.birthday || null,
           avatar_url: data.avatar_url || null,
+          bio: data.bio || null,
           created_at: data.created_at,
         };
       }
@@ -128,6 +132,7 @@ export async function searchUserByUsername(username: string): Promise<User | nul
           name: data.name,
           birthday: data.birthday || null,
           avatar_url: data.avatar_url || null,
+          bio: data.bio || null,
           created_at: data.created_at,
         };
       }

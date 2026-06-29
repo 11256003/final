@@ -56,7 +56,7 @@ export default function ChatsScreen() {
         }
         renderItem={({ item }) => (
           <Pressable style={styles.chatItem} onPress={() => router.push(`/chat/${item.friend.id}`)}>
-            <UserAvatar name={item.friend.name} uri={item.friend.avatar_url} size={56} />
+            <UserAvatar name={item.friend.name} uri={item.friend.avatar_url ?? undefined} size={56} />
             <View style={styles.chatInfo}>
               <View style={styles.nameRow}>
                 <Text style={styles.name}>{item.friend.name}</Text>

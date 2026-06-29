@@ -8,9 +8,9 @@ export default function RootLayout() {
       <StatusBar style="dark" />
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="register" options={{ title: "註冊帳號" }} />
+        <Stack.Screen name="register" options={{ title: "註冊帳號", headerBackTitle: "返回" }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="chat/[friendId]" options={{ title: "聊天室" }} />
+        <Stack.Screen name="chat/[friendId]" options={{ title: "聊天室", headerBackTitle: "返回" }} />
       </Stack>
     </AuthProvider>
   );

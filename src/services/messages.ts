@@ -1,4 +1,4 @@
-import { addDoc, collection, getDocs, onSnapshot, query, Unsubscribe, where, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, doc, getDocs, onSnapshot, query, Unsubscribe, updateDoc, where } from "firebase/firestore";
 import type { Message } from "../types/chat";
 import { db } from "./firebase";
 
@@ -35,7 +35,6 @@ export async function getMessagesFromFirestore(
         receiver_id: data.receiver_id,
         text: data.text,
         created_at: data.created_at,
-        read_at: data.read_at || null,
       });
     });
 
@@ -79,7 +78,6 @@ export function listenToMessages(
           receiver_id: data.receiver_id,
           text: data.text,
           created_at: data.created_at,
-          read_at: data.read_at || null,
         });
       });
 
@@ -131,56 +129,37 @@ export async function sendMessageToFirestore(
     console.error("[sendMessageToFirestore] Error sending message:", error);
     throw error;
   }
+  
 }
-
 /**
- * 標記來自特定發送者的所有未讀訊息為已讀
+ * 標記訊息為已讀
  */
-export async function markMessagesAsRead(
-  receiverId: string,
-  senderId: string
-): Promise<void> {
-  // 本地端標記已讀，不寫入 Firestore（避免權限問題）
-  // 實際實作在聊天室頁面的 state 中
-  console.log(`[markMessagesAsRead] Marking messages as read locally for ${senderId}`);
+export async function addReadReceipt(messageId: string, userId: string): Promise<void> {
+  try {
+    const messageRef = doc(db, "messages", messageId);
+    // 更新 Firestore 裡面的 isRead 狀態
+    await updateDoc(messageRef, {
+      isRead: true
+    });
+  } catch (error) {
+    console.error("[addReadReceipt] Error:", error);
+    throw error;
+  }
 }
-
 /**
- * 監聽特定訊息的已讀狀態
+ * 監聽單一訊息的已讀狀態 (實時)
  */
 export function listenToMessageReadStatus(
   messageId: string,
   callback: (isRead: boolean) => void
 ): Unsubscribe {
-  const q = query(
-    collection(db, "readReceipts"),
-    where("messageId", "==", messageId)
-  );
-
-  return onSnapshot(
-    q,
-    (querySnapshot) => {
-      const isRead = querySnapshot.docs.length > 0;
-      callback(isRead);
-    },
-    (error) => {
-      console.error(`[listenToMessageReadStatus] Error:`, error);
+  const messageRef = doc(db, "messages", messageId);
+  
+  return onSnapshot(messageRef, (docSnap) => {
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      // 如果資料庫裡有 isRead 欄位且為 true，就回傳 true 觸發前端更新
+      callback(!!data.isRead);
     }
-  );
-}
-
-/**
- * 標記訊息為已讀（寫入 readReceipts collection）
- */
-export async function addReadReceipt(messageId: string, userId: string): Promise<void> {
-  try {
-    await addDoc(collection(db, "readReceipts"), {
-      messageId,
-      userId,
-      readAt: serverTimestamp(),
-    });
-    console.log(`[addReadReceipt] Added read receipt for message ${messageId}`);
-  } catch (error) {
-    console.error("[addReadReceipt] Error adding read receipt:", error);
-  }
+  });
 }
