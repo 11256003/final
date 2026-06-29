@@ -77,39 +77,52 @@ export default function SettingsScreen() {
     }
   };
 
+  // ✨ 修正版 onSave：全面攔截 undefined 確保 Firestore 100% 寫入成功
   const onSave = async () => {
-    if (!user) return;
+    if (!user?.id) {
+      showMessage("錯誤", "找不到用戶狀態，請重新登入。");
+      return;
+    }
 
     setLoading(true);
     try {
       const userRef = doc(db, "users", user.id);
-      let remoteAvatarUrl = user.avatar_url || null;
+      
+      // 🛡️ 確保預設值絕對不用 undefined，防範資料庫崩潰
+      let remoteAvatarUrl = user.avatar_url || "";
 
       if (localAvatarUri) {
+        console.log("🚩 準備將新頭像上傳至 Sirv...");
         remoteAvatarUrl = await uploadProfileImage(user.id, localAvatarUri);
       } else if (avatarUrl.trim() && canDisplayAvatarUri(avatarUrl.trim())) {
         remoteAvatarUrl = avatarUrl.trim();
       }
 
-      const updatedUser = {
-        ...user,
-        name: name.trim() || user.name,
-        bio: bio.trim() || null,
-        avatar_url: remoteAvatarUrl,
+      // 🛡️ 防護 2：建立要更新進資料庫的「乾淨」資料包，若空值則預設為空字串
+      const updateData = {
+        name: name.trim() || "", 
+        bio: bio.trim() || "",   
+        avatar_url: remoteAvatarUrl || "",
       };
 
-      await updateDoc(userRef, {
-        name: updatedUser.name,
-        bio: updatedUser.bio,
-        avatar_url: updatedUser.avatar_url,
-      });
+      console.log("📦 準備寫入資料庫的資料:", updateData);
 
+      // 正式寫入 Firestore
+      await updateDoc(userRef, updateData);
+
+      // 同步更新前端 Context 與本地畫面狀態
+      const updatedUser = {
+        ...user,
+        ...updateData,
+      };
+      
       setUser(updatedUser);
       setLocalAvatarUri(null);
-      setAvatarUrl(remoteAvatarUrl || "");
+      setAvatarUrl(updateData.avatar_url);
       showMessage("成功", "個人資料已更新。");
+      
     } catch (err) {
-      console.error("Save profile failed:", err);
+      console.error("💥 Save profile failed (儲存失敗):", err);
       showMessage("錯誤", "個人資料更新失敗，請再試一次。");
     } finally {
       setLoading(false);
