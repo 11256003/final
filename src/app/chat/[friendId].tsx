@@ -17,7 +17,13 @@ import { commonStyles } from "../../components/styles";
 import { useAuth } from "../../context/AuthContext";
 import { db } from "../../services/firebase";
 import { getUserData } from "../../services/firestore";
-import { addReadReceipt, listenToMessageReadStatus, listenToMessages, sendMessageToFirestore } from "../../services/messages";
+import {
+  addReadReceipt,
+  listenToMessageReadStatus,
+  listenToMessages,
+  markConversationAsRead,
+  sendMessageToFirestore,
+} from "../../services/messages";
 import type { Message, User } from "../../types/chat";
 
 function formatTime(value: string) {
@@ -54,6 +60,10 @@ export default function ChatRoomScreen() {
           console.error("Error loading friend data:", err);
         }
       })();
+
+      void markConversationAsRead(user.id, friendId).catch((err) => {
+        console.error("Failed to mark conversation as read:", err);
+      });
 
       const unsubscribe = listenToMessages(user.id, friendId, async (newMessages) => {
         if (!isActive) return;

@@ -14,12 +14,14 @@ export type Message = {
   receiver_id: string;
   text: string;
   created_at: string;
+  isRead?: boolean;
 };
 
 export type ChatSummary = {
   friend: User;
   last_message: Message | null;
   last_time: string | null;
+  unread_count: number;
 };
 
 export type RegisterInput = {
