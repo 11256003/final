@@ -1,53 +1,37 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { updatePassword } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { useState } from "react";
-import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { UserAvatar } from "../../components/UserAvatar";
 import { useAuth } from "../../context/AuthContext";
 import { auth, db } from "../../services/firebase";
-<<<<<<< HEAD
+import { uploadProfileImage } from "../../services/storage";
 
 const canDisplayAvatarUri = (uri: string) =>
   uri.startsWith("data:") || uri.startsWith("blob:") || uri.startsWith("http://") || uri.startsWith("https://");
 
-const readFileAsDataUrl = (file: globalThis.File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read image file"));
-    reader.readAsDataURL(file);
-  });
+const showMessage = (title: string, message: string) => {
+  if (Platform.OS === "web") {
+    window.alert(message);
+    return;
+  }
 
-const resizeAvatarDataUrl = (dataUrl: string) =>
-  new Promise<string>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => {
-      const size = 160;
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const context = canvas.getContext("2d");
-
-      if (!context) {
-        reject(new Error("Canvas is not available"));
-        return;
-      }
-
-      const sourceSize = Math.min(image.width, image.height);
-      const sourceX = (image.width - sourceSize) / 2;
-      const sourceY = (image.height - sourceSize) / 2;
-      context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, size, size);
-      resolve(canvas.toDataURL("image/jpeg", 0.72));
-    };
-    image.onerror = () => reject(new Error("Failed to resize avatar image"));
-    image.src = dataUrl;
-  });
-=======
-import { uploadProfileImage } from "../../services/storage";
->>>>>>> eeea12603e14ed1fc4a85921c8a2bcbc2778869c
+  Alert.alert(title, message);
+};
 
 export default function SettingsScreen() {
   const { user, setUser, logout } = useAuth();
@@ -59,410 +43,332 @@ export default function SettingsScreen() {
   const [loading, setLoading] = useState(false);
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-
   const [isConfirmModalVisible, setConfirmModalVisible] = useState(false);
 
   const pickAvatarImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      const message = "需要相簿權限才能更換頭貼。";
-      if (Platform.OS === "web") window.alert(message);
-      else Alert.alert("權限不足", message);
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
-      setLocalAvatarUri(result.assets[0].uri);
-      setAvatarUrl(result.assets[0].uri);
-    }
-  };
-
-  // 儲存個人資料
-  const onSave = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const userRef = doc(db, "users", user.id);
-<<<<<<< HEAD
-      const trimmedAvatarUrl = avatarUrl.trim();
-      const avatarForFirestore = trimmedAvatarUrl && canDisplayAvatarUri(trimmedAvatarUrl) ? trimmedAvatarUrl : null;
-
-      await updateDoc(userRef, { name, avatar_url: avatarForFirestore });
-      setUser({
-        ...user,
-        name,
-        avatar_url: trimmedAvatarUrl && canDisplayAvatarUri(trimmedAvatarUrl) ? trimmedAvatarUrl : null,
-      });
-=======
-      let remoteAvatarUrl = user.avatar_url || null;
-
-      if (localAvatarUri) {
-        remoteAvatarUrl = await uploadProfileImage(user.id, localAvatarUri);
-      }
-
-      await updateDoc(userRef, {
-        name,
-        bio: bio || null,
-        avatar_url: remoteAvatarUrl || null,
-      });
-
-      setUser({ ...user, name, bio: bio || null, avatar_url: remoteAvatarUrl || null });
-      setLocalAvatarUri(null);
-      setAvatarUrl(remoteAvatarUrl || "");
-
->>>>>>> eeea12603e14ed1fc4a85921c8a2bcbc2778869c
-      if (Platform.OS === 'web') {
-        window.alert("個人資料已更新！");
-      } else {
-        Alert.alert("成功", "個人資料已更新");
-      }
-    } catch (err) {
-      if (Platform.OS === 'web') window.alert("儲存失敗");
-      else Alert.alert("錯誤", "儲存失敗");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 選擇並上傳頭像圖片
-  const onPickImage = async () => {
     try {
       setUploadingAvatar(true);
-      
-      // 請求相冊權限
+
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert("權限", "需要相冊訪問權限才能選擇圖片");
-        setUploadingAvatar(false);
+        showMessage("需要權限", "請允許讀取相簿，才能選擇頭像。");
         return;
       }
 
-      // 打開圖片選擇器
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.7,
-        base64: Platform.OS === "web",
       });
 
       if (result.canceled || !result.assets[0]) {
-        setUploadingAvatar(false);
         return;
       }
 
-      const asset = result.assets[0];
-      const imageDataUrl =
-        Platform.OS === "web" && asset.file
-          ? await readFileAsDataUrl(asset.file)
-          : Platform.OS === "web" && asset.base64
-          ? `data:${asset.mimeType ?? "image/jpeg"};base64,${asset.base64}`
-          : asset.uri;
-      console.log("選擇的圖片:", imageDataUrl);
-      
-      // Store a small avatar data URL in Firestore so it can sync without Storage.
-      if (!user) {
-        setUploadingAvatar(false);
-        return;
-      }
-
-      const avatarForFirestore =
-        Platform.OS === "web" && imageDataUrl.startsWith("data:")
-          ? await resizeAvatarDataUrl(imageDataUrl)
-          : imageDataUrl;
-
-      await updateDoc(doc(db, "users", user.id), { avatar_url: avatarForFirestore });
-      setAvatarUrl(avatarForFirestore);
-      setUser({ ...user, avatar_url: avatarForFirestore });
-
-      if (Platform.OS === "web") window.alert("頭像已更新並同步");
-      else Alert.alert("成功", "頭像已更新並同步");
-    } catch (err: any) {
-      console.error("圖片上傳失敗:", err);
-      const errorMsg = err.message || "圖片上傳失敗，請稍後重試";
-      Alert.alert("錯誤", errorMsg);
+      const uri = result.assets[0].uri;
+      setLocalAvatarUri(uri);
+      setAvatarUrl(uri);
+    } catch (err) {
+      console.error("Pick avatar failed:", err);
+      showMessage("錯誤", "選擇頭像失敗，請再試一次。");
     } finally {
       setUploadingAvatar(false);
     }
   };
 
-  // 執行密碼更新
-  const performPasswordUpdate = async () => {
-    setUpdatingPassword(true); 
-    setConfirmModalVisible(false); 
-    
-    if (!auth.currentUser) {
-        setUpdatingPassword(false);
-        return;
-    }
-    
+  const onSave = async () => {
+    if (!user) return;
+
+    setLoading(true);
     try {
-      await updatePassword(auth.currentUser, newPassword);
-      setNewPassword(""); 
-      if (Platform.OS === 'web') window.alert("密碼已成功更新！");
-      else Alert.alert("成功", "密碼已成功更新！");
-    } catch (err: any) {
-      const errorMsg = err.message || "更新失敗，您可能需要先登出再重新登入才能修改密碼。";
-      if (Platform.OS === 'web') window.alert(errorMsg);
-      else Alert.alert("錯誤", errorMsg);
+      const userRef = doc(db, "users", user.id);
+      let remoteAvatarUrl = user.avatar_url || null;
+
+      if (localAvatarUri) {
+        remoteAvatarUrl = await uploadProfileImage(user.id, localAvatarUri);
+      } else if (avatarUrl.trim() && canDisplayAvatarUri(avatarUrl.trim())) {
+        remoteAvatarUrl = avatarUrl.trim();
+      }
+
+      const updatedUser = {
+        ...user,
+        name: name.trim() || user.name,
+        bio: bio.trim() || null,
+        avatar_url: remoteAvatarUrl,
+      };
+
+      await updateDoc(userRef, {
+        name: updatedUser.name,
+        bio: updatedUser.bio,
+        avatar_url: updatedUser.avatar_url,
+      });
+
+      setUser(updatedUser);
+      setLocalAvatarUri(null);
+      setAvatarUrl(remoteAvatarUrl || "");
+      showMessage("成功", "個人資料已更新。");
+    } catch (err) {
+      console.error("Save profile failed:", err);
+      showMessage("錯誤", "個人資料更新失敗，請再試一次。");
     } finally {
-      setUpdatingPassword(false); 
+      setLoading(false);
     }
   };
 
-  // 打開確認彈窗
-  const onAskToUpdatePassword = () => {
-    // 🔥 修改這裡：檢查是否達到 6 個字元
-    if (newPassword.length < 6) {
-      if (Platform.OS === 'web') window.alert("密碼長度至少需要 6 個字元！");
-      else Alert.alert("提示", "密碼長度至少需要 6 個字元！");
+  const performPasswordUpdate = async () => {
+    setUpdatingPassword(true);
+    setConfirmModalVisible(false);
+
+    if (!auth.currentUser) {
+      setUpdatingPassword(false);
       return;
     }
-    setConfirmModalVisible(true); 
+
+    try {
+      await updatePassword(auth.currentUser, newPassword);
+      setNewPassword("");
+      showMessage("成功", "密碼已更新。");
+    } catch (err: any) {
+      const errorMsg = err.message || "更新密碼失敗，請重新登入後再試一次。";
+      showMessage("錯誤", errorMsg);
+    } finally {
+      setUpdatingPassword(false);
+    }
   };
 
-  // 登出
+  const onAskToUpdatePassword = () => {
+    if (newPassword.length < 6) {
+      showMessage("提醒", "密碼至少需要 6 個字元。");
+      return;
+    }
+
+    setConfirmModalVisible(true);
+  };
+
   const onSignOut = async () => {
     try {
       await logout();
-      router.replace("/"); 
+      router.replace("/");
     } catch (err) {
-      console.error("登出失敗:", err);
+      console.error("Sign out failed:", err);
+      showMessage("錯誤", "登出失敗，請再試一次。");
     }
   };
 
+  const displayAvatarUri = avatarUrl.trim();
+  const avatarUri = canDisplayAvatarUri(displayAvatarUri) ? displayAvatarUri : null;
+
   return (
     <View style={{ flex: 1 }}>
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-<<<<<<< HEAD
-        <UserAvatar name={name} uri={canDisplayAvatarUri(avatarUrl.trim()) ? avatarUrl.trim() : null} size={100} />
-=======
-        <UserAvatar name={name} uri={avatarUrl || undefined} size={100} />
->>>>>>> eeea12603e14ed1fc4a85921c8a2bcbc2778869c
-        <Text style={styles.profileName}>{user?.name}</Text>
-        <Text style={styles.profileBio}>{user?.bio || "請輸入你的自我介紹"}</Text>
-        <Pressable style={styles.avatarButton} onPress={pickAvatarImage}>
-          <Text style={styles.avatarButtonText}>更換頭貼</Text>
-        </Pressable>
-        <Text style={styles.profileId}>ID: {user?.id}</Text>
-      </View>
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <UserAvatar name={name} uri={avatarUri} size={100} />
+          <Text style={styles.profileName}>{name || user?.name}</Text>
+          <Text style={styles.profileBio}>{bio || "請輸入你的自我介紹"}</Text>
+          <Pressable style={styles.avatarButton} onPress={pickAvatarImage} disabled={uploadingAvatar}>
+            <Text style={styles.avatarButtonText}>{uploadingAvatar ? "選擇中..." : "更換頭像"}</Text>
+          </Pressable>
+          <Text style={styles.profileId}>ID: {user?.id}</Text>
+        </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>個人資料</Text>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>顯示名稱</Text>
-          <TextInput style={styles.input} value={name} onChangeText={setName} />
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>個人資料</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>顯示名稱</Text>
+            <TextInput style={styles.input} value={name} onChangeText={setName} />
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>自我介紹</Text>
+            <TextInput
+              style={[styles.input, styles.bioInput]}
+              value={bio}
+              onChangeText={setBio}
+              multiline
+              placeholder="寫一段簡短的自我介紹"
+              numberOfLines={4}
+            />
+          </View>
+          <Pressable style={loading ? styles.disabledSaveButton : styles.saveButton} onPress={onSave} disabled={loading}>
+            {loading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.buttonText}>儲存變更</Text>}
+          </Pressable>
         </View>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>自我介紹</Text>
-          <TextInput
-            style={[styles.input, styles.bioInput]}
-            value={bio}
-            onChangeText={setBio}
-            multiline
-            placeholder="介紹一下自己"
-            numberOfLines={4}
-          />
-        </View>
-        <Pressable 
-          style={uploadingAvatar ? styles.disabledSaveButton : styles.pickImageButton} 
-          onPress={onPickImage} 
-          disabled={uploadingAvatar}
-        >
-          {uploadingAvatar ? (
-            <>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>帳號安全</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>新密碼</Text>
+            <TextInput
+              style={styles.input}
+              secureTextEntry
+              placeholder="請輸入新密碼，至少 6 個字元"
+              value={newPassword}
+              onChangeText={setNewPassword}
+            />
+          </View>
+
+          <Pressable
+            style={
+              updatingPassword
+                ? styles.disabledPasswordUpdateButton
+                : newPassword.length >= 6
+                  ? styles.saveButton
+                  : [styles.saveButton, { backgroundColor: "#cbd5e1" }]
+            }
+            onPress={onAskToUpdatePassword}
+            disabled={updatingPassword}
+          >
+            {updatingPassword ? (
               <ActivityIndicator size="small" color="#fff" />
-              <Text style={styles.buttonText} numberOfLines={1}>上傳中...</Text>
-            </>
-          ) : (
-            <>
-              <Ionicons name="image-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-              <Text style={styles.buttonText}>選擇圖片</Text>
-            </>
-          )}
-        </Pressable>
-        <Pressable style={loading ? styles.disabledSaveButton : styles.saveButton} onPress={onSave} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>儲存修改</Text>
-          )}
-        </Pressable>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>安全設定</Text>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>新密碼</Text>
-          <TextInput 
-            style={styles.input} 
-            secureTextEntry 
-            placeholder="請輸入新密碼 (至少 6 個字元)"
-            value={newPassword} 
-            onChangeText={setNewPassword} 
-          />
+            ) : (
+              <Text style={styles.buttonText}>更新密碼</Text>
+            )}
+          </Pressable>
         </View>
-        
-        {/* 🔥 修改這裡：大於等於 6 才會亮起 */}
-        <Pressable 
-          style={
-            updatingPassword 
-              ? styles.disabledPasswordUpdateButton 
-              : newPassword.length >= 6 
-                ? styles.saveButton // 滿 6 個字：亮起 (預設的靛藍色)
-                : [styles.saveButton, { backgroundColor: '#cbd5e1' }] // 未滿 6 個字：淺灰色
-          } 
-          onPress={onAskToUpdatePassword}
-          disabled={updatingPassword}
-        >
-          {updatingPassword ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>更新密碼</Text>
-          )}
+
+        <Pressable style={styles.logoutButton} onPress={onSignOut}>
+          <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+          <Text style={styles.logoutText}>登出帳號</Text>
         </Pressable>
-      </View>
+      </ScrollView>
 
-      <Pressable style={styles.logoutButton} onPress={onSignOut}>
-        <Ionicons name="log-out-outline" size={20} color="#ef4444" />
-        <Text style={styles.logoutText}>登出帳號</Text>
-      </Pressable>
-    </ScrollView>
+      <Modal
+        visible={isConfirmModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setConfirmModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalIconContainer}>
+              <Ionicons name="key-outline" size={48} color="#6366f1" />
+            </View>
+            <Text style={styles.modalTitle}>確認更新密碼</Text>
+            <Text style={styles.modalMessage}>更新密碼後，下次登入請使用新密碼。</Text>
 
-    <Modal
-      visible={isConfirmModalVisible}
-      transparent={true} 
-      animationType="fade" 
-      onRequestClose={() => setConfirmModalVisible(false)} 
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalIconContainer}>
-            <Ionicons name="key-outline" size={48} color="#6366f1" /> 
-          </View>
-          <Text style={styles.modalTitle}>確認變更密碼</Text>
-          <Text style={styles.modalMessage}>您確定要變更您的密碼嗎？本操作無法撤銷。新密碼將在您下一次登入時生效。</Text>
-          
-          <View style={styles.modalButtonContainer}>
-            <Pressable 
-              style={[styles.modalButton, styles.modalButtonCancel]} 
-              onPress={() => setConfirmModalVisible(false)}
-            >
-              <Text style={styles.modalButtonTextCancel}>取消</Text>
-            </Pressable>
-            <Pressable 
-              style={[styles.modalButton, styles.modalButtonConfirm]} 
-              onPress={performPasswordUpdate}
-            >
-              <Text style={styles.modalButtonTextConfirm}>確定變更</Text>
-            </Pressable>
+            <View style={styles.modalButtonContainer}>
+              <Pressable style={[styles.modalButton, styles.modalButtonCancel]} onPress={() => setConfirmModalVisible(false)}>
+                <Text style={styles.modalButtonTextCancel}>取消</Text>
+              </Pressable>
+              <Pressable style={[styles.modalButton, styles.modalButtonConfirm]} onPress={performPasswordUpdate}>
+                <Text style={styles.modalButtonTextConfirm}>確認更新</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { alignItems: 'center', paddingVertical: 40, backgroundColor: '#fff' },
-  profileName: { fontSize: 24, fontWeight: '800', color: '#1e293b', marginTop: 16 },
-  profileBio: { fontSize: 14, color: '#64748b', marginTop: 8, textAlign: 'center', maxWidth: '80%' },
-  avatarButton: { marginTop: 12, backgroundColor: '#e2e8f0', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
-  avatarButtonText: { color: '#1e293b', fontWeight: '700' },
-  profileId: { fontSize: 14, color: '#94a3b8', marginTop: 4 },
-  section: { backgroundColor: '#fff', marginTop: 20, padding: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#6366f1', marginBottom: 20 },
+  container: { flex: 1, backgroundColor: "#f8fafc" },
+  header: { alignItems: "center", paddingVertical: 40, backgroundColor: "#fff" },
+  profileName: { fontSize: 24, fontWeight: "800", color: "#1e293b", marginTop: 16 },
+  profileBio: { fontSize: 14, color: "#64748b", marginTop: 8, textAlign: "center", maxWidth: "80%" },
+  avatarButton: { marginTop: 12, backgroundColor: "#e2e8f0", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
+  avatarButtonText: { color: "#1e293b", fontWeight: "700" },
+  profileId: { fontSize: 14, color: "#94a3b8", marginTop: 4 },
+  section: { backgroundColor: "#fff", marginTop: 20, padding: 20 },
+  sectionTitle: { fontSize: 16, fontWeight: "700", color: "#6366f1", marginBottom: 20 },
   inputGroup: { marginBottom: 16 },
-  label: { fontSize: 14, color: '#64748b', marginBottom: 8 },
-  input: { backgroundColor: '#f1f5f9', borderRadius: 12, padding: 12, fontSize: 16 },
-  bioInput: { minHeight: 100, textAlignVertical: 'top' },
-  saveButton: { backgroundColor: '#6366f1', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52 },
-  disabledSaveButton: { backgroundColor: '#a1a4f0', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52, opacity: 0.7 },
-  pickImageButton: { backgroundColor: '#10b981', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52, flexDirection: 'row', justifyContent: 'center' },
-  disabledPasswordUpdateButton: { backgroundColor: '#a8b0c2', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10, minHeight: 52, opacity: 0.7 },
-  buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  logoutButton: { 
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
-    marginVertical: 40, padding: 16 
+  label: { fontSize: 14, color: "#64748b", marginBottom: 8 },
+  input: { backgroundColor: "#f1f5f9", borderRadius: 12, padding: 12, fontSize: 16 },
+  bioInput: { minHeight: 100, textAlignVertical: "top" },
+  saveButton: { backgroundColor: "#6366f1", borderRadius: 12, padding: 16, alignItems: "center", marginTop: 10, minHeight: 52 },
+  disabledSaveButton: {
+    backgroundColor: "#a1a4f0",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    marginTop: 10,
+    minHeight: 52,
+    opacity: 0.7,
   },
-  logoutText: { color: '#ef4444', fontSize: 16, fontWeight: '700', marginLeft: 8 },
-
+  disabledPasswordUpdateButton: {
+    backgroundColor: "#a8b0c2",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    marginTop: 10,
+    minHeight: 52,
+    opacity: 0.7,
+  },
+  buttonText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: 40,
+    padding: 16,
+  },
+  logoutText: { color: "#ef4444", fontSize: 16, fontWeight: "700", marginLeft: 8 },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 24,
   },
   modalContainer: {
-    width: '100%',
-    maxWidth: 340, 
-    backgroundColor: '#ffffff',
+    width: "100%",
+    maxWidth: 340,
+    backgroundColor: "#ffffff",
     borderRadius: 24,
     padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.1,
     shadowRadius: 15,
-    elevation: 10, 
+    elevation: 10,
   },
   modalIconContainer: {
-    backgroundColor: '#eef2ff', 
+    backgroundColor: "#eef2ff",
     padding: 16,
     borderRadius: 50,
     marginBottom: 20,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '800',
-    color: '#1e293b',
+    fontWeight: "800",
+    color: "#1e293b",
     marginBottom: 10,
-    textAlign: 'center',
+    textAlign: "center",
   },
   modalMessage: {
     fontSize: 15,
-    color: '#6b7280',
-    textAlign: 'center',
+    color: "#6b7280",
+    textAlign: "center",
     lineHeight: 22,
     marginBottom: 30,
   },
   modalButtonContainer: {
-    flexDirection: 'row', 
-    gap: 12, 
-    width: '100%',
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
   },
   modalButton: {
-    flex: 1, 
+    flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   modalButtonCancel: {
-    backgroundColor: '#f1f5f9', 
+    backgroundColor: "#f1f5f9",
   },
   modalButtonConfirm: {
-    backgroundColor: '#6366f1', 
+    backgroundColor: "#6366f1",
   },
   modalButtonTextCancel: {
-    color: '#64748b',
-    fontWeight: '700',
+    color: "#64748b",
+    fontWeight: "700",
     fontSize: 15,
   },
   modalButtonTextConfirm: {
-    color: '#ffffff',
-    fontWeight: '700',
+    color: "#ffffff",
+    fontWeight: "700",
     fontSize: 15,
   },
 });

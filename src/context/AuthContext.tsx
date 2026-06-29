@@ -65,12 +65,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
               username: userData.username,
               name: userData.name,
               birthday: userData.birthday || null,
-<<<<<<< HEAD
               avatar_url: canDisplayAvatarUrl(userData.avatar_url) ? userData.avatar_url : null,
-=======
-              avatar_url: userData.avatar_url || null,
               bio: userData.bio || null,
->>>>>>> eeea12603e14ed1fc4a85921c8a2bcbc2778869c
               created_at: userData.created_at,
             };
             setUser(userState);
