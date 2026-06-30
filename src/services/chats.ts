@@ -168,6 +168,6 @@ export async function markChatAsRead(userId: string, friendId: string): Promise<
       await batch.commit();
     }
   } catch (error) {
-    console.error("[markChatAsRead] 標記已讀狀態時發生錯誤:", error);
+    //console.error("[markChatAsRead] 標記已讀狀態時發生錯誤:", error);
   }
 }

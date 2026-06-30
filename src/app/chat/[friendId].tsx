@@ -80,7 +80,7 @@ export default function ChatRoomScreen() {
               // 同時更新聊天列表的未讀狀態
               void markChatAsRead(user.id, friendId);
             } catch (err) {
-              console.error("Failed to add read receipt:", err);
+              //console.error("Failed to add read receipt:", err);
             }
           }
         }

@@ -119,7 +119,7 @@ export async function addReadReceipt(messageId: string, _userId: string): Promis
       isRead: true,
     });
   } catch (error) {
-    console.error("[addReadReceipt] Error:", error);
+    //console.error("[addReadReceipt] Error:", error);
     throw error;
   }
 }
